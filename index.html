@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect 4 · clean UI</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #f6f9fc 0%, #e6ecf3 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+            padding: 16px;
+        }
+
+        .game-container {
+            background: #ffffffdd;
+            backdrop-filter: blur(4px);
+            border-radius: 40px;
+            padding: 24px 28px 28px;
+            box-shadow: 0 20px 35px -8px rgba(0, 20, 30, 0.25), 0 8px 12px -4px rgba(0, 0, 0, 0.1), inset 0 1px 2px #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 18px;
+            padding: 0 8px;
+        }
+
+        .turn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+            color: #1f3b4c;
+            background: #eef3f8;
+            padding: 8px 18px 8px 16px;
+            border-radius: 100px;
+            box-shadow: inset 0 1px 4px rgba(0,0,0,0.02);
+        }
+
+        .turn-dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #ff5e5e;
+            box-shadow: 0 4px 6px -2px rgba(0,0,0,0.2), inset 0 -3px 0 #b13e3e;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        .turn-dot.player2 {
+            background: #ffd966;
+            box-shadow: 0 4px 6px -2px rgba(0,0,0,0.2), inset 0 -3px 0 #c9a53b;
+        }
+
+        .restart-btn {
+            background: white;
+            border: none;
+            border-radius: 40px;
+            padding: 10px 24px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1f3b4c;
+            letter-spacing: 0.3px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03), 0 2px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px white;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid #ffffff80;
+        }
+
+        .restart-btn:hover {
+            background: #f9fcff;
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05), 0 4px 8px rgba(0, 0, 0, 0.03), inset 0 1px 2px white;
+            transform: scale(0.98);
+        }
+
+        .restart-btn:active {
+            transform: scale(0.94);
+            background: #eef3f8;
+        }
+
+        /* board wrapper – holds column buttons above the grid */
+        .board-wrapper {
+            position: relative;
+            margin-top: 4px;
+        }
+
+        .column-buttons {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            gap: 0;
+            padding: 0 4px;
+            margin-bottom: 6px;
+            pointer-events: none; /* clicks go to grid cells, but we'll use button row anyway */
+        }
+
+        .column-btn {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 38px;
+            margin: 0 4px;
+            background: transparent;
+            border: none;
+            border-radius: 20px;
+            font-size: 1.5rem;
+            font-weight: 300;
+            color: #91a9b9;
+            cursor: pointer;
+            transition: all 0.15s;
+            pointer-events: auto;
+            opacity: 0.7;
+        }
+
+        .column-btn:hover {
+            opacity: 1;
+            background: #d9e4ee50;
+            color: #2b5777;
+            transform: translateY(-2px);
+        }
+
+        /* main grid – 7 columns, 6 rows */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 12px;
+            background: #1e3d52;
+            padding: 16px;
+            border-radius: 36px;
+            box-shadow: inset 0 10px 15px -5px #0e1f2b, 0 15px 25px -8px #0e1f2b90, 0 0 0 2px #ffffff40;
+            width: 560px;
+            max-width: 90vw;
+            aspect-ratio: 7 / 6;
+        }
+
+        /* cell background */
+        .cell {
+            background: #0e1f2b;
+            border-radius: 50%;
+            box-shadow: inset 0 6px 8px rgba(0, 0, 0, 0.6), inset 0 -2px 4px #3d6f8b80, 0 2px 4px rgba(255, 255, 255, 0.1);
+            aspect-ratio: 1;
+            transition: box-shadow 0.1s;
+            position: relative;
+        }
+
+        /* discs (player pieces) — placed inside cell as absolute overlay */
+        .disc {
+            position: absolute;
+            top: 8%;
+            left: 8%;
+            width: 84%;
+            height: 84%;
+            border-radius: 50%;
+            box-shadow: 0 6px 10px -2px rgba(0, 0, 0, 0.5), inset 0 -4px 4px rgba(0, 0, 0, 0.3), inset 0 4px 6px rgba(255, 255, 255, 0.6);
+            animation: dropIn 0.35s cubic-bezier(0.25, 0.8, 0.3, 1.1) forwards;
+        }
+
+        /* player 1 red */
+        .disc.player1 {
+            background: radial-gradient(circle at 35% 30%, #ff8a8a, #d43f3f 80%);
+        }
+
+        /* player 2 yellow */
+        .disc.player2 {
+            background: radial-gradient(circle at 35% 30%, #ffe08c, #e6b422 80%);
+        }
+
+        /* drop animation – from above */
+        @keyframes dropIn {
+            0% {
+                transform: translateY(-400%) scale(0.9);
+                opacity: 0.7;
+            }
+            70% {
+                transform: translateY(6%) scale(1.02);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* victory subtle highlight */
+        .cell.win-glow {
+            box-shadow: inset 0 0 0 4px #d4f0ff, 0 0 18px #aae0ff, inset 0 6px 8px rgba(0,0,0,0.5);
+            transition: box-shadow 0.3s;
+        }
+
+        .status-text {
+            font-size: 1.1rem;
+            margin-left: 6px;
+        }
+
+        /* message overlay */
+        .message {
+            font-weight: 600;
+            color: #1f3b4c;
+            background: #ffffffb0;
+            padding: 6px 22px;
+            border-radius: 40px;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+            backdrop-filter: blur(4px);
+            transition: 0.2s;
+        }
+
+        .footer {
+            margin-top: 12px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* small adjustments for small screens */
+        @media (max-width: 650px) {
+            .game-container {
+                padding: 18px 12px 16px;
+            }
+            .grid {
+                gap: 6px;
+                padding: 10px;
+                border-radius: 28px;
+                width: 90vw;
+            }
+            .column-btn {
+                font-size: 1.2rem;
+                margin: 0 2px;
+                height: 30px;
+            }
+            .turn-indicator {
+                padding: 6px 12px;
+                font-size: 0.9rem;
+            }
+            .turn-dot {
+                width: 22px;
+                height: 22px;
+            }
+            .restart-btn {
+                padding: 8px 16px;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <!-- status row -->
+    <div class="status-bar">
+        <div class="turn-indicator">
+            <span class="turn-dot" id="turnDot"></span>
+            <span id="turnText">Player 1</span>
+        </div>
+        <button class="restart-btn" id="restartButton">↻ New game</button>
+    </div>
+
+    <!-- column buttons + grid -->
+    <div class="board-wrapper">
+        <div class="column-buttons" id="columnButtons">
+            <!-- 7 buttons generated by JS for cleaner code, but we'll fill directly -->
+        </div>
+        <div class="grid" id="grid"></div>
+    </div>
+
+    <!-- winner / status message -->
+    <div class="footer">
+        <div class="message" id="message"></div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- GAME CONFIG ----------
+        const ROWS = 6;
+        const COLS = 7;
+        const PLAYER1 = 1; // red
+        const PLAYER2 = 2; // yellow
+
+        // ---------- STATE ----------
+        let board = Array(ROWS).fill().map(() => Array(COLS).fill(0)); // 0 empty
+        let currentPlayer = PLAYER1;
+        let gameOver = false;
+        let winCells = []; // store { row, col } for highlight
+
+        // DOM elements
+        const gridEl = document.getElementById('grid');
+        const columnButtonsEl = document.getElementById('columnButtons');
+        const turnDot = document.getElementById('turnDot');
+        const turnText = document.getElementById('turnText');
+        const messageEl = document.getElementById('message');
+        const restartBtn = document.getElementById('restartButton');
+
+        // ---------- INITIAL RENDER ----------
+        function buildBoard() {
+            // clear grid
+            gridEl.innerHTML = '';
+            // build 6 rows x 7 cols cells
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    // no disc by default
+                    gridEl.appendChild(cell);
+                }
+            }
+
+            // build column buttons (top)
+            columnButtonsEl.innerHTML = '';
+            for (let c = 0; c < COLS; c++) {
+                const btn = document.createElement('button');
+                btn.className = 'column-btn';
+                btn.dataset.col = c;
+                btn.textContent = '▼';
+                btn.setAttribute('aria-label', `Drop in column ${c+1}`);
+                columnButtonsEl.appendChild(btn);
+            }
+        }
+
+        // update the whole UI from board state (discs + turn indicator)
+        function renderBoard() {
+            // cells are in order: row-major, each cell has dataset row/col
+            const cells = gridEl.children;
+            for (let i = 0; i < cells.length; i++) {
+                const cell = cells[i];
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                const value = board[row][col];
+
+                // remove any existing disc
+                const existingDisc = cell.querySelector('.disc');
+                if (existingDisc) existingDisc.remove();
+
+                // remove win glow
+                cell.classList.remove('win-glow');
+
+                if (value !== 0) {
+                    const disc = document.createElement('div');
+                    disc.className = `disc player${value}`;
+                    cell.appendChild(disc);
+                }
+            }
+
+            // apply win glow if winCells exist
+            if (winCells.length > 0) {
+                winCells.forEach(({ row, col }) => {
+                    const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+                    if (cell) cell.classList.add('win-glow');
+                });
+            }
+
+            // update turn indicator
+            if (!gameOver) {
+                if (currentPlayer === PLAYER1) {
+                    turnDot.className = 'turn-dot';
+                    turnText.textContent = 'Player 1';
+                } else {
+                    turnDot.className = 'turn-dot player2';
+                    turnText.textContent = 'Player 2';
+                }
+            } else {
+                // game over – keep the dot but we can leave as is, message shows winner
+                if (winCells.length > 0) {
+                    // optionally style dot according to winner
+                    // but it's fine, message will say
+                }
+            }
+        }
+
+        // clear message
+        function clearMessage() {
+            messageEl.textContent = '';
+        }
+
+        // set message with a string
+        function setMessage(text) {
+            messageEl.textContent = text;
+        }
+
+        // reset game state
+        function resetGame() {
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            currentPlayer = PLAYER1;
+            gameOver = false;
+            winCells = [];
+            clearMessage();
+            // remove any win glow / re-render discs
+            renderBoard();
+            // update turn dot and text
+            turnDot.className = 'turn-dot';
+            turnText.textContent = 'Player 1';
+        }
+
+        // ---------- GAME LOGIC ----------
+        // find lowest empty row in column (returns row index or -1 if full)
+        function getLowestEmptyRow(col) {
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (board[r][col] === 0) return r;
+            }
+            return -1;
+        }
+
+        // check win condition from last move (row, col)
+        function checkWin(row, col, player) {
+            // directions: horizontal, vertical, diagonal down-right, diagonal up-right
+            const dirs = [
+                { dr: 0, dc: 1 },   // horizontal
+                { dr: 1, dc: 0 },   // vertical
+                { dr: 1, dc: 1 },   // diagonal ↘
+                { dr: 1, dc: -1 }   // diagonal ↙ (but check up-right from current)
+            ];
+
+            for (let d of dirs) {
+                let count = 1;
+                const cells = [{ row, col }];
+
+                // positive direction
+                for (let step = 1; step < 4; step++) {
+                    const nr = row + d.dr * step;
+                    const nc = col + d.dc * step;
+                    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) break;
+                    if (board[nr][nc] === player) {
+                        count++;
+                        cells.push({ row: nr, col: nc });
+                    } else break;
+                }
+
+                // negative direction
+                for (let step = 1; step < 4; step++) {
+                    const nr = row - d.dr * step;
+                    const nc = col - d.dc * step;
+                    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) break;
+                    if (board[nr][nc] === player) {
+                        count++;
+                        cells.push({ row: nr, col: nc });
+                    } else break;
+                }
+
+                if (count >= 4) {
+                    // return unique winning cells
+                    const unique = [];
+                    const seen = new Set();
+                    cells.forEach(cell => {
+                        const key = `${cell.row},${cell.col}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            unique.push(cell);
+                        }
+                    });
+                    return unique;
+                }
+            }
+            return null;
+        }
+
+        // check if board is full (draw)
+        function isBoardFull() {
+            for (let c = 0; c < COLS; c++) {
+                if (board[0][c] === 0) return false; // top row any empty
+            }
+            return true;
+        }
+
+        // handle drop disc in column
+        function dropDisc(col) {
+            if (gameOver) return false;
+
+            // find row
+            const row = getLowestEmptyRow(col);
+            if (row === -1) return false; // column full
+
+            // place disc
+            board[row][col] = currentPlayer;
+            renderBoard(); // instant render with animation (disc added with dropIn)
+
+            // check for win
+            const winningCells = checkWin(row, col, currentPlayer);
+            if (winningCells) {
+                gameOver = true;
+                winCells = winningCells;
+                // set winner message
+                const winnerName = currentPlayer === PLAYER1 ? 'Player 1' : 'Player 2';
+                setMessage(`✨ ${winnerName} wins! ✨`);
+                renderBoard(); // apply win glow
+                // keep turn indicator but we can freeze it
+                return true;
+            }
+
+            // check for draw
+            if (isBoardFull()) {
+                gameOver = true;
+                setMessage(`🤝 It's a draw!`);
+                return true;
+            }
+
+            // switch player
+            currentPlayer = (currentPlayer === PLAYER1) ? PLAYER2 : PLAYER1;
+            // update turn UI
+            if (!gameOver) {
+                if (currentPlayer === PLAYER1) {
+                    turnDot.className = 'turn-dot';
+                    turnText.textContent = 'Player 1';
+                } else {
+                    turnDot.className = 'turn-dot player2';
+                    turnText.textContent = 'Player 2';
+                }
+            }
+            return true;
+        }
+
+        // ---------- EVENT LISTENERS ----------
+        function attachEvents() {
+            // column buttons click
+            columnButtonsEl.addEventListener('click', (e) => {
+                const btn = e.target.closest('.column-btn');
+                if (!btn) return;
+                const col = parseInt(btn.dataset.col);
+                dropDisc(col);
+            });
+
+            // optional: also allow clicking on the grid cells to drop in that column
+            gridEl.addEventListener('click', (e) => {
+                const cell = e.target.closest('.cell');
+                if (!cell) return;
+                const col = parseInt(cell.dataset.col);
+                dropDisc(col);
+            });
+
+            // restart button
+            restartBtn.addEventListener('click', () => {
+                resetGame();
+            });
+        }
+
+        // ---------- INITIAL SETUP ----------
+        function init() {
+            buildBoard();      // create empty grid and column buttons
+            resetGame();       // set board state, render discs (none), update turn
+            attachEvents();    // attach listeners
+        }
+
+        init();
+
+        // expose for any debugging (optional)
+        window.dropDisc = dropDisc;
+
+    })();
+</script>
+</body>
+</html>
