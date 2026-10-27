@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connect 4 · clean UI</title>
+    <title>Connect 4 · vs AI</title>
     <style>
         * {
             box-sizing: border-box;
@@ -51,6 +51,11 @@
             padding: 8px 18px 8px 16px;
             border-radius: 100px;
             box-shadow: inset 0 1px 4px rgba(0,0,0,0.02);
+            transition: opacity 0.2s;
+        }
+
+        .turn-indicator.thinking {
+            opacity: 0.7;
         }
 
         .turn-dot {
@@ -93,7 +98,6 @@
             background: #eef3f8;
         }
 
-        /* board wrapper – holds column buttons above the grid */
         .board-wrapper {
             position: relative;
             margin-top: 4px;
@@ -106,7 +110,6 @@
             gap: 0;
             padding: 0 4px;
             margin-bottom: 6px;
-            pointer-events: none; /* clicks go to grid cells, but we'll use button row anyway */
         }
 
         .column-btn {
@@ -124,18 +127,22 @@
             color: #91a9b9;
             cursor: pointer;
             transition: all 0.15s;
-            pointer-events: auto;
             opacity: 0.7;
         }
 
-        .column-btn:hover {
+        .column-btn:hover:not(:disabled) {
             opacity: 1;
             background: #d9e4ee50;
             color: #2b5777;
             transform: translateY(-2px);
         }
 
-        /* main grid – 7 columns, 6 rows */
+        .column-btn:disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -150,17 +157,16 @@
             aspect-ratio: 7 / 6;
         }
 
-        /* cell background */
         .cell {
             background: #0e1f2b;
             border-radius: 50%;
             box-shadow: inset 0 6px 8px rgba(0, 0, 0, 0.6), inset 0 -2px 4px #3d6f8b80, 0 2px 4px rgba(255, 255, 255, 0.1);
             aspect-ratio: 1;
-            transition: box-shadow 0.1s;
             position: relative;
+            overflow: visible;
         }
 
-        /* discs (player pieces) — placed inside cell as absolute overlay */
+        /* falling disc – animation from above the board */
         .disc {
             position: absolute;
             top: 8%;
@@ -169,26 +175,25 @@
             height: 84%;
             border-radius: 50%;
             box-shadow: 0 6px 10px -2px rgba(0, 0, 0, 0.5), inset 0 -4px 4px rgba(0, 0, 0, 0.3), inset 0 4px 6px rgba(255, 255, 255, 0.6);
-            animation: dropIn 0.35s cubic-bezier(0.25, 0.8, 0.3, 1.1) forwards;
+            animation: dropIn 0.4s cubic-bezier(0.25, 0.8, 0.3, 1.1) forwards;
+            z-index: 5;
         }
 
-        /* player 1 red */
         .disc.player1 {
             background: radial-gradient(circle at 35% 30%, #ff8a8a, #d43f3f 80%);
         }
 
-        /* player 2 yellow */
         .disc.player2 {
             background: radial-gradient(circle at 35% 30%, #ffe08c, #e6b422 80%);
         }
 
-        /* drop animation – from above */
+        /* drop from above the board (top of column) to target */
         @keyframes dropIn {
             0% {
-                transform: translateY(-400%) scale(0.9);
+                transform: translateY(-600%) scale(0.9);
                 opacity: 0.7;
             }
-            70% {
+            75% {
                 transform: translateY(6%) scale(1.02);
                 opacity: 1;
             }
@@ -198,23 +203,24 @@
             }
         }
 
-        /* victory subtle highlight */
         .cell.win-glow {
             box-shadow: inset 0 0 0 4px #d4f0ff, 0 0 18px #aae0ff, inset 0 6px 8px rgba(0,0,0,0.5);
             transition: box-shadow 0.3s;
         }
 
-        .status-text {
-            font-size: 1.1rem;
-            margin-left: 6px;
+        .footer {
+            margin-top: 16px;
+            min-height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        /* message overlay */
         .message {
             font-weight: 600;
             color: #1f3b4c;
             background: #ffffffb0;
-            padding: 6px 22px;
+            padding: 8px 28px;
             border-radius: 40px;
             font-size: 1.1rem;
             box-shadow: 0 4px 10px rgba(0,0,0,0.03);
@@ -222,15 +228,6 @@
             transition: 0.2s;
         }
 
-        .footer {
-            margin-top: 12px;
-            height: 40px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* small adjustments for small screens */
         @media (max-width: 650px) {
             .game-container {
                 padding: 18px 12px 16px;
@@ -263,24 +260,19 @@
 </head>
 <body>
 <div class="game-container">
-    <!-- status row -->
     <div class="status-bar">
-        <div class="turn-indicator">
+        <div class="turn-indicator" id="turnIndicator">
             <span class="turn-dot" id="turnDot"></span>
-            <span id="turnText">Player 1</span>
+            <span id="turnText">Your turn</span>
         </div>
         <button class="restart-btn" id="restartButton">↻ New game</button>
     </div>
 
-    <!-- column buttons + grid -->
     <div class="board-wrapper">
-        <div class="column-buttons" id="columnButtons">
-            <!-- 7 buttons generated by JS for cleaner code, but we'll fill directly -->
-        </div>
+        <div class="column-buttons" id="columnButtons"></div>
         <div class="grid" id="grid"></div>
     </div>
 
-    <!-- winner / status message -->
     <div class="footer">
         <div class="message" id="message"></div>
     </div>
@@ -288,43 +280,41 @@
 
 <script>
     (function() {
-        // ---------- GAME CONFIG ----------
+        // ---------- CONFIG ----------
         const ROWS = 6;
         const COLS = 7;
-        const PLAYER1 = 1; // red
-        const PLAYER2 = 2; // yellow
+        const HUMAN = 1;      // red (player 1)
+        const AI = 2;         // yellow (player 2)
 
         // ---------- STATE ----------
-        let board = Array(ROWS).fill().map(() => Array(COLS).fill(0)); // 0 empty
-        let currentPlayer = PLAYER1;
+        let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        let currentPlayer = HUMAN;
         let gameOver = false;
-        let winCells = []; // store { row, col } for highlight
+        let winCells = [];
+        let isAITurnInProgress = false;  // lock to prevent double clicks
 
-        // DOM elements
+        // DOM
         const gridEl = document.getElementById('grid');
         const columnButtonsEl = document.getElementById('columnButtons');
+        const turnIndicator = document.getElementById('turnIndicator');
         const turnDot = document.getElementById('turnDot');
         const turnText = document.getElementById('turnText');
         const messageEl = document.getElementById('message');
         const restartBtn = document.getElementById('restartButton');
 
-        // ---------- INITIAL RENDER ----------
+        // ---------- RENDER HELPERS ----------
         function buildBoard() {
-            // clear grid
             gridEl.innerHTML = '';
-            // build 6 rows x 7 cols cells
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
                     cell.dataset.row = r;
                     cell.dataset.col = c;
-                    // no disc by default
                     gridEl.appendChild(cell);
                 }
             }
 
-            // build column buttons (top)
             columnButtonsEl.innerHTML = '';
             for (let c = 0; c < COLS; c++) {
                 const btn = document.createElement('button');
@@ -336,9 +326,8 @@
             }
         }
 
-        // update the whole UI from board state (discs + turn indicator)
-        function renderBoard() {
-            // cells are in order: row-major, each cell has dataset row/col
+        // full re-render from board state (no animation on existing discs)
+        function renderBoard(animateNewDisc = false, newDiscInfo = null) {
             const cells = gridEl.children;
             for (let i = 0; i < cells.length; i++) {
                 const cell = cells[i];
@@ -346,72 +335,66 @@
                 const col = parseInt(cell.dataset.col);
                 const value = board[row][col];
 
-                // remove any existing disc
                 const existingDisc = cell.querySelector('.disc');
                 if (existingDisc) existingDisc.remove();
-
-                // remove win glow
                 cell.classList.remove('win-glow');
 
                 if (value !== 0) {
                     const disc = document.createElement('div');
                     disc.className = `disc player${value}`;
+
+                    // if this is the new disc and we want animation, we add animation class
+                    // by default all new discs get animation via CSS (dropIn).
+                    // but we want to avoid re-animating old discs on every render.
+                    // so we only animate discs that are new. We'll handle by adding a "no-anim" class for old ones.
+                    if (!animateNewDisc || !newDiscInfo || newDiscInfo.row !== row || newDiscInfo.col !== col) {
+                        disc.style.animation = 'none';
+                    } else {
+                        // ensure animation runs
+                        disc.style.animation = 'dropIn 0.4s cubic-bezier(0.25, 0.8, 0.3, 1.1) forwards';
+                    }
+
                     cell.appendChild(disc);
                 }
             }
 
-            // apply win glow if winCells exist
             if (winCells.length > 0) {
                 winCells.forEach(({ row, col }) => {
                     const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
                     if (cell) cell.classList.add('win-glow');
                 });
             }
+        }
 
-            // update turn indicator
-            if (!gameOver) {
-                if (currentPlayer === PLAYER1) {
-                    turnDot.className = 'turn-dot';
-                    turnText.textContent = 'Player 1';
-                } else {
-                    turnDot.className = 'turn-dot player2';
-                    turnText.textContent = 'Player 2';
-                }
+        // update turn indicator
+        function updateTurnDisplay() {
+            if (gameOver) return;
+            if (currentPlayer === HUMAN) {
+                turnDot.className = 'turn-dot';
+                turnText.textContent = 'Your turn';
+                turnIndicator.classList.remove('thinking');
             } else {
-                // game over – keep the dot but we can leave as is, message shows winner
-                if (winCells.length > 0) {
-                    // optionally style dot according to winner
-                    // but it's fine, message will say
-                }
+                turnDot.className = 'turn-dot player2';
+                turnText.textContent = 'AI thinking...';
+                turnIndicator.classList.add('thinking');
             }
         }
 
-        // clear message
         function clearMessage() {
             messageEl.textContent = '';
         }
 
-        // set message with a string
         function setMessage(text) {
             messageEl.textContent = text;
         }
 
-        // reset game state
-        function resetGame() {
-            board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-            currentPlayer = PLAYER1;
-            gameOver = false;
-            winCells = [];
-            clearMessage();
-            // remove any win glow / re-render discs
-            renderBoard();
-            // update turn dot and text
-            turnDot.className = 'turn-dot';
-            turnText.textContent = 'Player 1';
+        // enable/disable column buttons
+        function setButtonsEnabled(enabled) {
+            const btns = columnButtonsEl.querySelectorAll('.column-btn');
+            btns.forEach(btn => btn.disabled = !enabled);
         }
 
         // ---------- GAME LOGIC ----------
-        // find lowest empty row in column (returns row index or -1 if full)
         function getLowestEmptyRow(col) {
             for (let r = ROWS - 1; r >= 0; r--) {
                 if (board[r][col] === 0) return r;
@@ -419,21 +402,18 @@
             return -1;
         }
 
-        // check win condition from last move (row, col)
         function checkWin(row, col, player) {
-            // directions: horizontal, vertical, diagonal down-right, diagonal up-right
             const dirs = [
-                { dr: 0, dc: 1 },   // horizontal
-                { dr: 1, dc: 0 },   // vertical
-                { dr: 1, dc: 1 },   // diagonal ↘
-                { dr: 1, dc: -1 }   // diagonal ↙ (but check up-right from current)
+                { dr: 0, dc: 1 },
+                { dr: 1, dc: 0 },
+                { dr: 1, dc: 1 },
+                { dr: 1, dc: -1 }
             ];
 
             for (let d of dirs) {
                 let count = 1;
                 const cells = [{ row, col }];
 
-                // positive direction
                 for (let step = 1; step < 4; step++) {
                     const nr = row + d.dr * step;
                     const nc = col + d.dc * step;
@@ -444,7 +424,6 @@
                     } else break;
                 }
 
-                // negative direction
                 for (let step = 1; step < 4; step++) {
                     const nr = row - d.dr * step;
                     const nc = col - d.dc * step;
@@ -456,7 +435,6 @@
                 }
 
                 if (count >= 4) {
-                    // return unique winning cells
                     const unique = [];
                     const seen = new Set();
                     cells.forEach(cell => {
@@ -472,97 +450,206 @@
             return null;
         }
 
-        // check if board is full (draw)
         function isBoardFull() {
             for (let c = 0; c < COLS; c++) {
-                if (board[0][c] === 0) return false; // top row any empty
+                if (board[0][c] === 0) return false;
             }
             return true;
         }
 
-        // handle drop disc in column
-        function dropDisc(col) {
-            if (gameOver) return false;
+        // ---------- AI (simple but decent heuristic) ----------
+        function aiChooseColumn() {
+            // 1. Win if possible
+            for (let c = 0; c < COLS; c++) {
+                const r = getLowestEmptyRow(c);
+                if (r === -1) continue;
+                board[r][c] = AI;
+                const win = checkWin(r, c, AI);
+                board[r][c] = 0;
+                if (win) return c;
+            }
 
-            // find row
+            // 2. Block opponent win
+            for (let c = 0; c < COLS; c++) {
+                const r = getLowestEmptyRow(c);
+                if (r === -1) continue;
+                board[r][c] = HUMAN;
+                const win = checkWin(r, c, HUMAN);
+                board[r][c] = 0;
+                if (win) return c;
+            }
+
+            // 3. Heuristic: prefer center columns
+            const colOrder = [3, 2, 4, 1, 5, 0, 6]; // center-first
+            // but also try to create own threats / block forks
+            // simple: pick first non-full from center order
+            for (let c of colOrder) {
+                if (getLowestEmptyRow(c) !== -1) {
+                    return c;
+                }
+            }
+            return -1;
+        }
+
+        // ---------- DROP DISC (with animation and delay) ----------
+        function dropDisc(col, player, callback) {
+            if (gameOver) return;
+
             const row = getLowestEmptyRow(col);
-            if (row === -1) return false; // column full
+            if (row === -1) return; // column full
 
-            // place disc
-            board[row][col] = currentPlayer;
-            renderBoard(); // instant render with animation (disc added with dropIn)
+            board[row][col] = player;
+            // render with animation only for this disc
+            renderBoard(true, { row, col });
 
-            // check for win
-            const winningCells = checkWin(row, col, currentPlayer);
+            // check win
+            const winningCells = checkWin(row, col, player);
             if (winningCells) {
                 gameOver = true;
                 winCells = winningCells;
-                // set winner message
-                const winnerName = currentPlayer === PLAYER1 ? 'Player 1' : 'Player 2';
-                setMessage(`✨ ${winnerName} wins! ✨`);
-                renderBoard(); // apply win glow
-                // keep turn indicator but we can freeze it
+                const winnerName = player === HUMAN ? 'You win!' : 'AI wins!';
+                setMessage(`✨ ${winnerName} ✨`);
+                renderBoard(true, { row, col }); // re-render with glow
+                setButtonsEnabled(false);
+                updateTurnDisplay();
+                if (callback) callback(true);
                 return true;
             }
 
-            // check for draw
             if (isBoardFull()) {
                 gameOver = true;
                 setMessage(`🤝 It's a draw!`);
+                setButtonsEnabled(false);
+                updateTurnDisplay();
+                if (callback) callback(true);
                 return true;
             }
 
             // switch player
-            currentPlayer = (currentPlayer === PLAYER1) ? PLAYER2 : PLAYER1;
-            // update turn UI
-            if (!gameOver) {
-                if (currentPlayer === PLAYER1) {
-                    turnDot.className = 'turn-dot';
-                    turnText.textContent = 'Player 1';
-                } else {
-                    turnDot.className = 'turn-dot player2';
-                    turnText.textContent = 'Player 2';
-                }
-            }
+            currentPlayer = (currentPlayer === HUMAN) ? AI : HUMAN;
+            updateTurnDisplay();
+            if (callback) callback(false);
             return true;
+        }
+
+        // ---------- AI TURN (with delay) ----------
+        function aiTurn() {
+            if (gameOver) return;
+            if (currentPlayer !== AI) return;
+            if (isAITurnInProgress) return;
+
+            isAITurnInProgress = true;
+            setButtonsEnabled(false);
+            turnText.textContent = 'AI thinking...';
+            turnIndicator.classList.add('thinking');
+
+            // delay to simulate thinking
+            setTimeout(() => {
+                if (gameOver || currentPlayer !== AI) {
+                    isAITurnInProgress = false;
+                    return;
+                }
+
+                const col = aiChooseColumn();
+                if (col === -1) {
+                    // no move possible (shouldn't happen)
+                    isAITurnInProgress = false;
+                    return;
+                }
+
+                dropDisc(col, AI, (ended) => {
+                    isAITurnInProgress = false;
+                    if (!ended) {
+                        // after AI move, if game continues, enable buttons for human
+                        if (!gameOver && currentPlayer === HUMAN) {
+                            setButtonsEnabled(true);
+                            updateTurnDisplay();
+                        } else if (gameOver) {
+                            setButtonsEnabled(false);
+                        }
+                    } else {
+                        setButtonsEnabled(false);
+                    }
+                });
+            }, 650); // thinking delay
+        }
+
+        // ---------- HUMAN MOVE ----------
+        function handleHumanMove(col) {
+            if (gameOver) return;
+            if (currentPlayer !== HUMAN) return;
+            if (isAITurnInProgress) return; // safety
+
+            // column full?
+            if (getLowestEmptyRow(col) === -1) return;
+
+            setButtonsEnabled(false);
+
+            dropDisc(col, HUMAN, (ended) => {
+                if (!ended) {
+                    // if game continues, trigger AI turn after a short pause
+                    if (!gameOver && currentPlayer === AI) {
+                        setTimeout(() => {
+                            aiTurn();
+                        }, 350); // small gap between human and AI
+                    }
+                } else {
+                    setButtonsEnabled(false);
+                }
+            });
+        }
+
+        // ---------- RESET ----------
+        function resetGame() {
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            currentPlayer = HUMAN;
+            gameOver = false;
+            winCells = [];
+            isAITurnInProgress = false;
+            clearMessage();
+            renderBoard(false);
+            setButtonsEnabled(true);
+            turnIndicator.classList.remove('thinking');
+            turnDot.className = 'turn-dot';
+            turnText.textContent = 'Your turn';
         }
 
         // ---------- EVENT LISTENERS ----------
         function attachEvents() {
-            // column buttons click
+            // column buttons
             columnButtonsEl.addEventListener('click', (e) => {
                 const btn = e.target.closest('.column-btn');
-                if (!btn) return;
+                if (!btn || btn.disabled) return;
+                if (gameOver || currentPlayer !== HUMAN || isAITurnInProgress) return;
                 const col = parseInt(btn.dataset.col);
-                dropDisc(col);
+                handleHumanMove(col);
             });
 
-            // optional: also allow clicking on the grid cells to drop in that column
+            // grid cells (optional, clicking on cell drops in that column)
             gridEl.addEventListener('click', (e) => {
                 const cell = e.target.closest('.cell');
                 if (!cell) return;
+                if (gameOver || currentPlayer !== HUMAN || isAITurnInProgress) return;
                 const col = parseInt(cell.dataset.col);
-                dropDisc(col);
+                // only allow if column not full
+                if (getLowestEmptyRow(col) === -1) return;
+                handleHumanMove(col);
             });
 
-            // restart button
+            // restart
             restartBtn.addEventListener('click', () => {
                 resetGame();
             });
         }
 
-        // ---------- INITIAL SETUP ----------
+        // ---------- INIT ----------
         function init() {
-            buildBoard();      // create empty grid and column buttons
-            resetGame();       // set board state, render discs (none), update turn
-            attachEvents();    // attach listeners
+            buildBoard();
+            resetGame();
+            attachEvents();
         }
 
         init();
-
-        // expose for any debugging (optional)
-        window.dropDisc = dropDisc;
-
     })();
 </script>
 </body>
